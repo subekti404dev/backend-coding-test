@@ -13,6 +13,8 @@
 
 1. Signup to https://vercel.com and login to your dashboard
 2. Install vercel on your computer `npm install -g vercel`
-3. Open project directory on your terminal and type a command `vercel` and login
-4. Run command `vercel` again to setup your vercel project and after follow the instructions you will get deployment url of this project
+3. Open project directory on your terminal and build the project with command `yarn build`
+4. Copy `vercel.json` to build directory
+5. Change directory to `build/` and type a command `vercel` to login vercel
+5. Run command `vercel` again to setup your vercel project and after follow the instructions you will get deployment url of this project
 

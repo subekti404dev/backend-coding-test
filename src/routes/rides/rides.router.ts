@@ -5,14 +5,13 @@ const jsonParser = bodyParser.json();
 
 router.post('/', jsonParser, (req: any, res: Response) => {
 	const db = req.db;
-	const startLatitude = Number(req.body.start_lat);
-	const startLongitude = Number(req.body.start_long);
-	const endLatitude = Number(req.body.end_lat);
-	const endLongitude = Number(req.body.end_long);
-	const riderName = req.body.rider_name;
-	const driverName = req.body.driver_name;
-	const driverVehicle = req.body.driver_vehicle;
-
+	const startLatitude = Number(req.body.startLat);
+	const startLongitude = Number(req.body.startLong);
+	const endLatitude = Number(req.body.endLat);
+	const endLongitude = Number(req.body.endLong);
+	const riderName = req.body.riderName;
+	const driverName = req.body.driverName;
+	const driverVehicle = req.body.driverVehicle;
 	if (
 		startLatitude < -90 ||
   startLatitude > 90 ||
@@ -61,19 +60,20 @@ router.post('/', jsonParser, (req: any, res: Response) => {
 	}
 
 	const values = [
-		req.body.start_lat,
-		req.body.start_long,
-		req.body.end_lat,
-		req.body.end_long,
-		req.body.rider_name,
-		req.body.driver_name,
-		req.body.driver_vehicle,
+		startLongitude,
+		startLongitude,
+		endLatitude,
+		endLongitude,
+		riderName,
+		driverName,
+		driverVehicle,
 	];
 
 	db.run(
 		'INSERT INTO Rides(startLat, startLong, endLat, endLong, riderName, driverName, driverVehicle) VALUES (?, ?, ?, ?, ?, ?, ?)',
 		values,
-		(err: any, row: any) => {
+		function (this: any, err: any, row: any) {
+			console.log({ err, row });
 			if (err) {
 				return res.send({
 					error_code: 'SERVER_ERROR',
@@ -83,7 +83,7 @@ router.post('/', jsonParser, (req: any, res: Response) => {
 
 			db.all(
 				'SELECT * FROM Rides WHERE rideID = ?',
-				row.lastID,
+				this.lastID,
 				function (err: any, rows: any[]) {
 					if (err) {
 						return res.send({
@@ -100,28 +100,35 @@ router.post('/', jsonParser, (req: any, res: Response) => {
 });
 
 router.get('/', (req: any, res: Response) => {
+	const page = req.query.page || 1;
+	const limit = req.query.limit || 30;
 	const db = req.db;
-	db.all('SELECT * FROM Rides', function (err: any, rows: any[]) {
-		if (err) {
-			return res.send({
-				error_code: 'SERVER_ERROR',
-				message: 'Unknown error',
-			});
-		}
+	const offset = (page - 1) * limit;
+	db.all(
+		`SELECT * FROM Rides LIMIT ${limit} OFFSET ${offset}`,
+		function (err: any, rows: any[]) {
+			if (err) {
+				return res.send({
+					error_code: 'SERVER_ERROR',
+					message: 'Unknown error',
+				});
+			}
 
-		if (rows.length === 0) {
-			return res.send({
-				error_code: 'RIDES_NOT_FOUND_ERROR',
-				message: 'Could not find any rides',
-			});
-		}
+			if (rows.length === 0) {
+				return res.send({
+					error_code: 'RIDES_NOT_FOUND_ERROR',
+					message: 'Could not find any rides',
+				});
+			}
 
-		res.send(rows);
-	});
+			res.send(rows);
+		}
+	);
 });
 
 router.get('/:id', (req: any, res: Response) => {
 	const db = req.db;
+	console.log({id: req.params.id});
 	db.all(
 		`SELECT * FROM Rides WHERE rideID='${req.params.id}'`,
 		function (err: any, rows: any[]) {

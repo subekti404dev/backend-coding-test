@@ -1,23 +1,15 @@
 'use strict';
 
 const request = require('supertest');
+const { serializedDB } = require('../src/db/serialized-db')
+let app;
 
-const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database(':memory:');
-
-const app = require('../src/app')(db);
-const buildSchemas = require('../src/schemas');
 
 describe('API tests', () => {
     before((done) => {
-        db.serialize((err) => { 
-            if (err) {
-                return done(err);
-            }
-
-            buildSchemas(db);
-
-            done();
+        serializedDB().then((db) => {
+            app = require('../src/app')(db);
+            done()
         });
     });
 

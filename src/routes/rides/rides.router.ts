@@ -1,154 +1,76 @@
-import { Response, Router } from 'express';
+import { NextFunction, Response, Router } from 'express';
 import bodyParser from 'body-parser';
+import { createRideValidation } from './rides.validation';
+import { AsyncDB } from '../../db/async-db';
 const router = Router();
 const jsonParser = bodyParser.json();
 
-router.post('/', jsonParser, (req: any, res: Response) => {
-	const db = req.db;
-	const startLatitude = Number(req.body.startLat);
-	const startLongitude = Number(req.body.startLong);
-	const endLatitude = Number(req.body.endLat);
-	const endLongitude = Number(req.body.endLong);
-	const riderName = req.body.riderName;
-	const driverName = req.body.driverName;
-	const driverVehicle = req.body.driverVehicle;
-	if (
-		startLatitude < -90 ||
-  startLatitude > 90 ||
-  startLongitude < -180 ||
-  startLongitude > 180
-	) {
-		return res.send({
-			error_code: 'VALIDATION_ERROR',
-			message:
-    'Start latitude and longitude must be between -90 - 90 and -180 to 180 degrees respectively',
-		});
-	}
+router.post(
+	'/',
+	jsonParser,
+	createRideValidation,
+	async (req: any, res: Response, next: NextFunction) => {
+		try {
+			const asyncDB = new AsyncDB(req.db);
+			let { startLat, startLong, endLat, endLong } = req.body;
+			const { riderName, driverName, driverVehicle } = req.body;
+			startLat = startLat ? Number(startLat) : 0;
+			startLong = startLong ? Number(startLong) : 0;
+			endLat = endLat ? Number(endLat) : 0;
+			endLong = endLong ? Number(endLong) : 0;
 
-	if (
-		endLatitude < -90 ||
-  endLatitude > 90 ||
-  endLongitude < -180 ||
-  endLongitude > 180
-	) {
-		return res.send({
-			error_code: 'VALIDATION_ERROR',
-			message:
-    'End latitude and longitude must be between -90 - 90 and -180 to 180 degrees respectively',
-		});
-	}
-
-	if (typeof riderName !== 'string' || riderName.length < 1) {
-		return res.send({
-			error_code: 'VALIDATION_ERROR',
-			message: 'Rider name must be a non empty string',
-		});
-	}
-
-	if (typeof driverName !== 'string' || driverName.length < 1) {
-		return res.send({
-			error_code: 'VALIDATION_ERROR',
-			message: 'Rider name must be a non empty string',
-		});
-	}
-
-	if (typeof driverVehicle !== 'string' || driverVehicle.length < 1) {
-		return res.send({
-			error_code: 'VALIDATION_ERROR',
-			message: 'Rider name must be a non empty string',
-		});
-	}
-
-	const values = [
-		startLongitude,
-		startLongitude,
-		endLatitude,
-		endLongitude,
-		riderName,
-		driverName,
-		driverVehicle,
-	];
-
-	db.run(
-		'INSERT INTO Rides(startLat, startLong, endLat, endLong, riderName, driverName, driverVehicle) VALUES (?, ?, ?, ?, ?, ?, ?)',
-		values,
-		function (this: any, err: any, row: any) {
-			console.log({ err, row });
-			if (err) {
-				return res.send({
-					error_code: 'SERVER_ERROR',
-					message: 'Unknown error',
-				});
-			}
-
-			db.all(
-				'SELECT * FROM Rides WHERE rideID = ?',
-				this.lastID,
-				function (err: any, rows: any[]) {
-					if (err) {
-						return res.send({
-							error_code: 'SERVER_ERROR',
-							message: 'Unknown error',
-						});
-					}
-
-					res.send(rows);
-				}
+			const row: any = await asyncDB.run(
+				'INSERT INTO Rides(startLat, startLong, endLat, endLong, riderName, driverName, driverVehicle) VALUES (?, ?, ?, ?, ?, ?, ?)',
+				[
+					startLat,
+					startLong,
+					endLat,
+					endLong,
+					riderName,
+					driverName,
+					driverVehicle,
+				]
 			);
+
+			const rows = await asyncDB.all(
+				'SELECT * FROM Rides WHERE rideID = ?',
+				row.lastID
+			);
+			res.send(rows);
+		} catch (error) {
+			next(error);
 		}
-	);
+	}
+);
+
+router.get('/', async (req: any, res: Response, next: NextFunction) => {
+	try {
+		const asyncDB = new AsyncDB(req.db);
+		const page = req.query.page || 1;
+		const limit = req.query.limit || 30;
+		const offset = (page - 1) * limit;
+		const rows = await asyncDB.all('SELECT * FROM Rides LIMIT ? OFFSET ?', [
+			limit,
+			offset,
+		]);
+		res.send(rows);
+	} catch (error) {
+		next(error);
+	}
 });
 
-router.get('/', (req: any, res: Response) => {
-	const page = req.query.page || 1;
-	const limit = req.query.limit || 30;
-	const db = req.db;
-	const offset = (page - 1) * limit;
-	db.all(
-		`SELECT * FROM Rides LIMIT ${limit} OFFSET ${offset}`,
-		function (err: any, rows: any[]) {
-			if (err) {
-				return res.send({
-					error_code: 'SERVER_ERROR',
-					message: 'Unknown error',
-				});
-			}
+router.get('/:id', async (req: any, res: Response, next: NextFunction) => {
+	try {
+		const asyncDB = new AsyncDB(req.db);
+		const rows = await asyncDB.all(
+			'SELECT * FROM Rides WHERE rideID= ?',
+			req.params.id
+		);
 
-			if (rows.length === 0) {
-				return res.send({
-					error_code: 'RIDES_NOT_FOUND_ERROR',
-					message: 'Could not find any rides',
-				});
-			}
-
-			res.send(rows);
-		}
-	);
-});
-
-router.get('/:id', (req: any, res: Response) => {
-	const db = req.db;
-	console.log({id: req.params.id});
-	db.all(
-		`SELECT * FROM Rides WHERE rideID='${req.params.id}'`,
-		function (err: any, rows: any[]) {
-			if (err) {
-				return res.send({
-					error_code: 'SERVER_ERROR',
-					message: 'Unknown error',
-				});
-			}
-
-			if (rows.length === 0) {
-				return res.send({
-					error_code: 'RIDES_NOT_FOUND_ERROR',
-					message: 'Could not find any rides',
-				});
-			}
-
-			res.send(rows);
-		}
-	);
+		res.send(rows);
+	} catch (error) {
+		next(error);
+	}
 });
 
 export default router;
